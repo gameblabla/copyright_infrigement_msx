@@ -16,14 +16,11 @@
 # ----------------------------------------------------------------------------
 
 # [REQUIRED]
-# Path to top of the libmsx installed folder.
-LIBMSX_HOME = ../..
-
 # [REQUIRED]
 # Specify NAME of your rom image to be built.
 #   The rom image `${NAME}.rom` will be made into ${BINDIR} folder.
 #   e.g. If NAME was foo, the image will be `bin/foo.rom`.
-NAME = graphics
+NAME = Copyright_Infringement_MSX2_gameblabla
 
 # [OPTIONAL]
 # You may specify additional C compiler/linker options.

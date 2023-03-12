@@ -39,8 +39,14 @@ uint16_t game_start = 0;
 const unsigned char status_level1[] =
 { 2, 3, 0, 2, 3, 0, 2, 3, 0, 4 };
 
+#define WAIT_VSYNC \
+	await_vsync(); await_vsync(); await_vsync(); \
+	
+// This is done in order to avoid more overhead
+#define ownlocate(x,y) \
+  CSRX = x; \
+  CSRY = y; \
 
-struct sprite spr[4];
 uint8_t frame_picture = 0;
 uint8_t msx_graphics = 0;
 
@@ -125,9 +131,49 @@ extern const unsigned char challenge_pcm[];
 extern const unsigned char them_pcm[];
 extern const unsigned char loss_pcm[];
 
+#define ARRAY_SIZEOF(a)    (sizeof(a) / sizeof(a[0]))
+
+// sound data stream for PSG channel A
+const uint8_t se_channel_1[] = {
+  0xa0, 0x02, 0xd0, 0x10, 0x00, 0x00, 0xd6, // T180 L32 S0 M4096 O5C
+  0x60, 0x03, 0x90, 0x00, 0xca,             // T180 L32 S0       O5C+
+  0x60, 0x05, 0x90, 0x00, 0xbe,             // T180 L16 S0       O5D
+  0xff,                                     // end of stream
+};
+
+// sound data stream for PSG channel B
+const uint8_t se_channel_2[] = {
+  0xa0, 0x02, 0xd0, 0x10, 0x00, 0x01, 0xac, // T180 L32 S0 M4096 O4C
+  0x60, 0x03, 0x90, 0x01, 0x94,             // T180 L32 S0       O4C+
+  0x60, 0x05, 0x90, 0x01, 0x7d,             // T180 L16 S0       O4D
+  0xff,                                     // end of stream
+};
+
+// the sound fragment structure that holds pointers to the sound data streams.
+const struct sound_fragment se_A_part = {
+  .streams = {
+    [0] = se_channel_1,
+    [1] = se_channel_2,
+    [2] = 0,                    // not used
+  },
+};
+
+// the list of "pointers" to the sound fragments.
+const struct sound_fragment * se_fragments[] = {
+  &se_A_part,
+};
+
+// the sound clip structure.
+const struct sound_clip se = {
+  .priority = 0,
+  .num_fragments = ARRAY_SIZEOF(se_fragments),
+  .fragments = se_fragments,
+};
+
+
 void pause()
 {
-	while(1)
+	for(;;)
 	{
 		pressed = joypad_get_state(0) | joypad_get_state(1);
 		clicked = (old_pressed ^ pressed) & pressed;
@@ -145,6 +191,14 @@ void main(void)
 {
 	uint16_t x = 0;
 	uint8_t exit = 0;
+	
+	sound_init();
+
+	// Register the sound driver as VSYNC handler.
+	set_vsync_handler(sound_player);
+
+	sound_set_repeat(false);       // Turn on the auto-repeat of BGM.
+	sound_start();                // Start the BGM.
 	
 	screen2();
 	vdp_set_visible(true);
@@ -196,7 +250,7 @@ void titlescreen_func()
 
 void sprite_text(unsigned char id)
 {
-	locate(12, 22);
+	ownlocate(12, 22);
 	switch(id)
 	{
 		/* Keep it up !!*/
@@ -226,14 +280,14 @@ void sprite_text(unsigned char id)
 void add_score(unsigned short sc)
 {
 	global_score += sc << 3;
-	locate(0, 23);
+	ownlocate(0, 23);
 	printu(global_score);
 }
 
 void decrease_score()
 {
 	if (global_score > 2) global_score-=3;
-	locate(0, 23);
+	ownlocate(0, 23);
 	printu(global_score);
 }
 
@@ -257,6 +311,7 @@ void ingame_fucking()
 		{
 			if ((clicked & VK_FIRE_0) && frame_picture == 4)
 			{
+				sound_effect(&se);
 				frame_picture = 5;
 			}
 		}
@@ -326,10 +381,8 @@ void switch_gamemode(unsigned char mode)
 			/* Titlescreen only takes the upper half, so clear the rest manually */
 			vdp_cmd_execute_HMMV(0, 104, 256, 212-104, 1);
 			/* The VDP command is done asynchronously, wait a bit */
-			await_vsync();
-			await_vsync();
-			await_vsync();
-			locate(7, 22);
+			WAIT_VSYNC;
+			ownlocate(7, 22);
 			print("PRESS FIRE TO START");
 		break;
 		
@@ -339,12 +392,12 @@ void switch_gamemode(unsigned char mode)
 			screen5();
 			vdp_set_screen_lines(VDP_SCREEN_LINES_212);
 			PUT_PALETTE_MSX(fuck_frame);
-			color(13, 1, 2);
+			color(13, 1, 0);
 			status = 0;
 			time = 0;
 			global_score = 0;
 			sprite_text(status_level1[status]);
-			locate(0, 22);
+			ownlocate(0, 22);
 			print("Score:");
 			add_score(0);
 		break;
@@ -359,20 +412,16 @@ void switch_gamemode(unsigned char mode)
 			
 			vdp_cmd_execute_HMMV(0, 160, 256, 212-160, 0);
 			/* The VDP command is done asynchronously, wait a bit */
-			await_vsync();
-			await_vsync();
-			await_vsync();
+			WAIT_VSYNC;
 			
-			locate(0, 20);
+			ownlocate(0, 20);
 			print(text_introduction_firstline[0]);
 			vdp_set_visible(true);
 			
 			bmem_set_bank(23);
 			PCM_Play_11K((unsigned short)ohmy_pcm);
 			
-			await_vsync();
-			await_vsync();
-			await_vsync();
+			WAIT_VSYNC;
 			
 			bmem_set_bank(24);
 			PCM_Play_8K((unsigned short)whatdo_pcm);
@@ -396,7 +445,7 @@ void details_beforemj1()
 {
 	screen5();
 	cls();
-	locate(0, 2);
+	ownlocate(0, 2);
 	print(text_minigame_1);
 	pause();
 	switch_gamemode(1);
@@ -405,17 +454,17 @@ void details_beforemj1()
 void results()
 {
 			screen5();
-			locate(0, 2);
+			ownlocate(0, 2);
 			print(results_minigame_1[0]);
-			locate(0, 3);
+			ownlocate(0, 3);
 			printu(global_score);
-			locate(0, 5);
+			ownlocate(0, 5);
 			if (global_score == 666)
 			{
 				print(results_minigame_1[2]);
 				pause();
 				cls();
-				locate(0, 2);
+				ownlocate(0, 2);
 				print(gameover_mj1_alternate2);
 				pause();
 			}
@@ -424,7 +473,7 @@ void results()
 				print(results_minigame_1[1]);
 				pause();
 				cls();
-				locate(0, 2);
+				ownlocate(0, 2);
 				print(gameover_mj1);
 				pause();
 			}
@@ -433,7 +482,7 @@ void results()
 				print(results_minigame_1[2]);
 				pause();
 				cls();
-				locate(0, 2);
+				ownlocate(0, 2);
 				print(gameover_mj1_alternate);
 				pause();
 			}
@@ -449,12 +498,10 @@ void results()
 				showpicture_screenmode5();
 				vdp_cmd_execute_HMMV(0, 160, 256, 212-160, 0);
 				
-				await_vsync();
-				await_vsync();
-				await_vsync();
+				WAIT_VSYNC;
 				
 				vdp_set_visible(true);
-				locate(0, 20);
+				ownlocate(0, 20);
 				print("Congrats ! Haha!\nYou're a Alpha male !\nI should spare you for now.\nHope you 'enjoyed' my game.\nSee ya.");
 				pause();
 			}
@@ -486,12 +533,10 @@ void story()
 		{
 			vdp_cmd_execute_HMMV(0, 160, 256, 212-160, 0);
 			/* The VDP command is done asynchronously, wait a bit */
-			await_vsync();
-			await_vsync();
-			await_vsync();
+			WAIT_VSYNC;
 			
 			yd++;
-			locate(0, 20);
+			ownlocate(0, 20);
 			print(text_introduction_firstline[yd]);
 			await_vsync();
 			switch(yd)

@@ -1,1 +1,1 @@
--I../../include
+-I${LIBMSX_HOME}/include
