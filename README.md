@@ -2,6 +2,8 @@ Copyright Infrigement : The regressive right (MSX2)
 ===================================================
 by gameblabla
 
+Warning : 18+ only, don't play this kids !
+
 MSX2 version, based upon the original Colecovision/MegaROM game.
 This one has a few graphical improvements as well as another addition : speech !
 The game remains the same otherwise and features FMVs on a 512k ASCII16 bankswitched game.
